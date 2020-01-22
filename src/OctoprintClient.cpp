@@ -9,19 +9,23 @@
 namespace octoprint {
 
 OctoprintClient::OctoprintClient(const String &apiKey, Client &client, const IPAddress &hostIp, uint16_t hostPort) :
-        client{client},
+        client(client),
         apiKey{apiKey},
         hostIp{hostIp},
         hostPort{hostPort} {}
 
-
 OctoprintClient::OctoprintClient(const String &apiKey, Client &client, const String &hostUrl, uint16_t hostPort) :
-        client{client},
+        client(client),
         apiKey{apiKey},
         hostUrl{hostUrl},
         hostPort{hostPort} {}
 
-String OctoprintClient::sendRequestToOctoprint(const String &type, const String &command, const String &data) {
+
+OverallState OctoprintClient::getCachedState() const {
+    return OverallState{state};
+}
+
+String OctoprintClient::sendRequestToOctoprint(const String &type, const String &command, const String &data) const {
     if (isDebugEnabled) Serial.println("OctoprintClient::sendRequestToOctoprint");
 
     if ((type != "GET") && (type != "POST")) {
@@ -139,19 +143,19 @@ String OctoprintClient::sendRequestToOctoprint(const String &type, const String 
         Serial.print("\nhttpCode:");
         Serial.println(httpCode);
     }
-    httpStatusCode = httpCode;
+    state.httpStatusCode = httpCode;
 
     return body;
 }
 
 
-String OctoprintClient::sendGetToOctoprint(String command) {
+String OctoprintClient::sendGetToOctoprint(String command) const {
     if (isDebugEnabled) Serial.println("OctoprintClient::sendGetToOctoprint");
     return sendRequestToOctoprint("GET", command, "");
 }
 
 
-bool OctoprintClient::getOctoprintVersion() {
+bool OctoprintClient::fetchOctoprintVersion() {
     /** Retrieve information regarding server and API version.
     * Returns a JSON object with two keys, api (API version), server (server version).
     * Status Codes: 200 OK – No error
@@ -163,15 +167,15 @@ bool OctoprintClient::getOctoprintVersion() {
     DeserializationError e = deserializeJson(requestBuffer, response);
     if (!e) {
         if (requestBuffer.containsKey("api")) {
-            octoprintVersion.api = requestBuffer["api"].as<String>();
-            octoprintVersion.server = requestBuffer["server"].as<String>();
+            state.octoprintVersion.api = requestBuffer["api"].as<String>();
+            state.octoprintVersion.server = requestBuffer["server"].as<String>();
             return true;
         }
     }
     return false;
 }
 
-bool OctoprintClient::getPrinterStatistics() {
+bool OctoprintClient::fetchPrinterStatistics() {
     /**
     * Retrieves the current state of the printer.
     * Returns: 200 OK with a Full State Response in the body upon success.
@@ -190,7 +194,7 @@ bool OctoprintClient::getPrinterStatistics() {
         }
         return true;
     } else {
-        printerStatus.printerStateText = response;
+        state.printerState.printerStateText = response;
         if (response == "Printer is not operational") {
             return true;
         }
@@ -200,7 +204,7 @@ bool OctoprintClient::getPrinterStatistics() {
 
 /***** PRINT JOB OPPERATIONS *****/
 
-bool OctoprintClient::octoPrintJobStart() {
+bool OctoprintClient::jobStart() {
     /**
     * Job commands allow starting, pausing and cancelling print jobs.
     *
@@ -215,56 +219,56 @@ bool OctoprintClient::octoPrintJobStart() {
     const String command = "/api/job";
     const String postData("{\"command\": \"start\"}");
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintJobCancel() {
+bool OctoprintClient::jobCancel() {
     String command = "/api/job";
     String postData = "{\"command\": \"cancel\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintJobRestart() {
+bool OctoprintClient::jobRestart() {
     String command = "/api/job";
     String postData = "{\"command\": \"restart\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintJobPauseResume() {
+bool OctoprintClient::jobPauseResume() {
     String command = "/api/job";
     String postData = "{\"command\": \"pause\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintJobPause() {
+bool OctoprintClient::jobPause() {
     const String command = "/api/job";
     const String postData = "{\"command\": \"pause\", \"action\": \"pause\"}";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintJobResume() {
+bool OctoprintClient::jobResume() {
     const String command = "/api/job";
     const String postData = "{\"command\": \"pause\", \"action\": \"resume\"}";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
 
-bool OctoprintClient::octoPrintFileSelect(String &path) {
+bool OctoprintClient::fileSelect(String &path) {
     const String command = "/api/files/local" + path;
     const String postData = "{\"command\": \"select\", \"print\": false }";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
@@ -275,36 +279,36 @@ bool OctoprintClient::octoPrintFileSelect(String &path) {
  * Retrieve information about the current job (if there is one).
  * Returns a 200 OK with a Job information response in the body.
  * */
-bool OctoprintClient::getPrintJob() {
+bool OctoprintClient::fetchPrintJob() {
     const String command = "/api/job";
     const String response = sendGetToOctoprint(command);
 
     DeserializationError e = deserializeJson(requestBuffer, response);
     if (!e) {
         String printerState = requestBuffer["state"];
-        printJob.printerState = printerState;
+        state.printJob.printerState = printerState;
 
         if (requestBuffer.containsKey("job")) {
             long estimatedPrintTime = requestBuffer["job"]["estimatedPrintTime"];
-            printJob.estimatedPrintTime = estimatedPrintTime;
+            state.printJob.estimatedPrintTime = estimatedPrintTime;
 
             long jobFileDate = requestBuffer["job"]["file"]["date"];
             String jobFileName = requestBuffer["job"]["file"]["name"] | "";
             String jobFileOrigin = requestBuffer["job"]["file"]["origin"] | "";
             long jobFileSize = requestBuffer["job"]["file"]["size"];
-            printJob.jobFileDate = jobFileDate;
-            printJob.jobFileName = jobFileName;
-            printJob.jobFileOrigin = jobFileOrigin;
-            printJob.jobFileSize = jobFileSize;
+            state.printJob.jobFileDate = jobFileDate;
+            state.printJob.jobFileName = jobFileName;
+            state.printJob.jobFileOrigin = jobFileOrigin;
+            state.printJob.jobFileSize = jobFileSize;
 
             long jobFilamentTool0Length = requestBuffer["job"]["filament"]["tool0"]["length"] | 0;
             float jobFilamentTool0Volume = requestBuffer["job"]["filament"]["tool0"]["volume"] | 0.0;
-            printJob.jobFilamentTool0Length = jobFilamentTool0Length;
-            printJob.jobFilamentTool0Volume = jobFilamentTool0Volume;
+            state.printJob.jobFilamentTool0Length = jobFilamentTool0Length;
+            state.printJob.jobFilamentTool0Volume = jobFilamentTool0Volume;
             long jobFilamentTool1Length = requestBuffer["job"]["filament"]["tool1"]["length"] | 0;
             float jobFilamentTool1Volume = requestBuffer["job"]["filament"]["tool1"]["volume"] | 0.0;
-            printJob.jobFilamentTool1Length = jobFilamentTool1Length;
-            printJob.jobFilamentTool1Volume = jobFilamentTool1Volume;
+            state.printJob.jobFilamentTool1Length = jobFilamentTool1Length;
+            state.printJob.jobFilamentTool1Volume = jobFilamentTool1Volume;
         }
         if (requestBuffer.containsKey("progress")) {
             float progressCompletion = requestBuffer["progress"]["completion"] |
@@ -313,26 +317,23 @@ bool OctoprintClient::getPrintJob() {
             long progressPrintTime = requestBuffer["progress"]["printTime"];
             long progressPrintTimeLeft = requestBuffer["progress"]["printTimeLeft"];
 
-            printJob.progressCompletion = progressCompletion;
-            printJob.progressFilepos = progressFilepos;
-            printJob.progressPrintTime = progressPrintTime;
-            printJob.progressPrintTimeLeft = progressPrintTimeLeft;
+            state.printJob.progressCompletion = progressCompletion;
+            state.printJob.progressFilepos = progressFilepos;
+            state.printJob.progressPrintTime = progressPrintTime;
+            state.printJob.progressPrintTimeLeft = progressPrintTimeLeft;
         }
         return true;
     }
     return false;
 }
 
-/** getOctoprintEndpointResults()
- * General function to get any GET endpoint of the API and return body as a string for you to format or view as you wish.
- * */
-String OctoprintClient::getOctoprintEndpointResults(String command) {
+String OctoprintClient::sendCustomCommand(String command) const {
     if (isDebugEnabled) Serial.println("OctoprintApi::getOctoprintEndpointResults() CALLED");
     return sendGetToOctoprint("/api/" + command);
 }
 
 
-String OctoprintClient::sendPostToOctoPrint(const String &command, const String &postData) {
+String OctoprintClient::sendPostToOctoPrint(const String &command, const String &postData) const {
     if (isDebugEnabled) Serial.println("OctoprintApi::sendPostToOctoPrint() CALLED");
     return sendRequestToOctoprint("POST", command, postData.c_str());
 }
@@ -345,27 +346,27 @@ String OctoprintClient::sendPostToOctoPrint(const String &command, const String 
  * 204 No Content – No error
  * 400 Bad Request – If the selected port or baudrate for a connect command are not part of the available options.
  * */
-bool OctoprintClient::octoPrintConnectionAutoConnect() {
+bool OctoprintClient::sendAutoConnect() {
     const String command = "/api/connection";
     const String postData = "{\"command\": \"connect\"}";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintConnectionDisconnect() {
+bool OctoprintClient::sendDisconnect() {
     const String command = "/api/connection";
     const String postData = "{\"command\": \"disconnect\"}";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintConnectionFakeAck() {
+bool OctoprintClient::sendFakeAck() {
     const String command = "/api/connection";
     const String postData = "{\"command\": \"fake_ack\"}";
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
@@ -378,7 +379,7 @@ bool OctoprintClient::octoPrintConnectionFakeAck() {
  * All of these commands except feedrate may only be sent if the printer is currently operational and not printing. Otherwise a 409 Conflict is returned.
  * Upon success, a status code of 204 No Content and an empty body is returned.
  * */
-bool OctoprintClient::octoPrintPrintHeadHome() {
+bool OctoprintClient::printHeadHome() {
     const String command = "/api/printer/printhead";
     //   {
     //   "command": "home",
@@ -386,12 +387,12 @@ bool OctoprintClient::octoPrintPrintHeadHome() {
     // }
     String postData = "{\"command\": \"home\",\"axes\": [\"x\", \"y\"]}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
 
-bool OctoprintClient::octoPrintPrintHeadRelativeJog(double x, double y, double z, double f) {
+bool OctoprintClient::printHeadRelativeJog(double x, double y, double z, double f) {
     const String command = "/api/printer/printhead";
     //  {
     // "command": "jog",
@@ -427,48 +428,48 @@ bool OctoprintClient::octoPrintPrintHeadRelativeJog(double x, double y, double z
     Serial.println(postData);
 
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintExtrude(double amount) {
+bool OctoprintClient::printExtrude(double amount) {
     const String command = "/api/printer/tool";
     char postData[256];
     snprintf(postData, 256, "{ \"command\": \"extrude\", \"amount\": %f }", amount);
 
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintSetBedTemperature(uint16_t t) {
+bool OctoprintClient::setTargetBedTemperature(uint16_t celsius) {
     const String command = "/api/printer/bed";
     char postData[256];
-    snprintf(postData, 256, "{ \"command\": \"target\", \"target\": %d }", t);
+    snprintf(postData, 256, "{ \"command\": \"target\", \"target\": %d }", celsius);
 
     const String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
 
-bool OctoprintClient::octoPrintSetTool0Temperature(uint16_t t) {
+bool OctoprintClient::setTargetTool0Temperature(uint16_t celsius) {
     const String command = "/api/printer/tool";
     char postData[256];
-    snprintf(postData, 256, "{ \"command\": \"target\", \"targets\": { \"tool0\": %d } }", t);
+    snprintf(postData, 256, "{ \"command\": \"target\", \"targets\": { \"tool0\": %d } }", celsius);
 
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintSetTool1Temperature(uint16_t t) {
+bool OctoprintClient::setTargetTool1Temperature(uint16_t celsius) {
     const String command = "/api/printer/tool";
     char postData[256];
-    snprintf(postData, 256, "{ \"command\": \"target\", \"targets\": { \"tool1\": %d } }", t);
+    snprintf(postData, 256, "{ \"command\": \"target\", \"targets\": { \"tool1\": %d } }", celsius);
 
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
@@ -484,21 +485,21 @@ bool OctoprintClient::octoPrintSetTool1Temperature(uint16_t t) {
  * Returns a 200 OK with a Temperature Response in the body upon success.
  * If no heated bed is configured for the currently selected printer profile, the resource will return an 409 Conflict.
  * */
-bool OctoprintClient::octoPrintGetPrinterBed() {
+bool OctoprintClient::fetchPrinterBed() {
     String command = "/api/printer/bed?history=true&limit=2";
     String response = sendGetToOctoprint(command);
 
     DeserializationError e = deserializeJson(requestBuffer, response);
     if (!e) {
         if (requestBuffer.containsKey("bed")) {
-            printerStatus.temperature.bedCurrentCelsius = requestBuffer["bed"]["actual"].as<float>();
-            printerStatus.temperature.bedOffsetCelsius = requestBuffer["bed"]["offset"].as<float>();
-            printerStatus.temperature.bedTargetCelsius = requestBuffer["bed"]["target"].as<float>();
+            state.printerState.temperature.bedCurrentCelsius = requestBuffer["bed"]["actual"].as<float>();
+            state.printerState.temperature.bedOffsetCelsius = requestBuffer["bed"]["offset"].as<float>();
+            state.printerState.temperature.bedTargetCelsius = requestBuffer["bed"]["target"].as<float>();
         }
         if (requestBuffer.containsKey("history")) {
             const JsonArray &history = requestBuffer["history"];
-            printerStatus.temperature.bedHistoryTempTimestamp = history[0]["time"].as<long>();
-            printerStatus.temperature.bedHistoryTempCurrentCelsius = history[0]["bed"]["actual"].as<float>();
+            state.printerState.temperature.bedHistoryTempTimestamp = history[0]["time"].as<long>();
+            state.printerState.temperature.bedHistoryTempCurrentCelsius = history[0]["bed"]["actual"].as<float>();
         }
         return true;
     }
@@ -512,27 +513,27 @@ bool OctoprintClient::octoPrintGetPrinterBed() {
  * SD commands allow initialization, refresh and release of the printer’s SD card (if available).
  * Available commands are: init, refresh, release
 */
-bool OctoprintClient::octoPrintPrinterSDInit() {
+bool OctoprintClient::printerSdInit() {
     const String command = "/api/printer/sd";
     const String postData = "{\"command\": \"init\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintPrinterSDRefresh() {
+bool OctoprintClient::printerSdRefresh() {
     const String command = "/api/printer/sd";
     const String postData = "{\"command\": \"refresh\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
-bool OctoprintClient::octoPrintPrinterSDRelease() {
+bool OctoprintClient::printerSdRelease() {
     const String command = "/api/printer/sd";
     const String postData = "{\"command\": \"release\"}";
     String response = sendPostToOctoPrint(command, postData);
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
@@ -542,14 +543,14 @@ Retrieves the current state of the printer’s SD card.
 If SD support has been disabled in OctoPrint’s settings, a 404 Not Found is returned.
 Returns a 200 OK with an SD State Response in the body upon success.
 */
-bool OctoprintClient::octoPrintGetPrinterSD() {
+bool OctoprintClient::fetchPrinterSdStatus() {
     const String command = "/api/printer/sd";
     String response = sendGetToOctoprint(command);
 
     DeserializationError e = deserializeJson(requestBuffer, response);
     if (!e) {
         if (requestBuffer["ready"].as<bool>())
-            printerStatus.addState(PrinterState::OperationalStateFlags::Ready);
+            state.printerState.addState(PrinterState::OperationalStateFlags::Ready);
         return true;
     }
     return false;
@@ -562,7 +563,7 @@ http://docs.octoprint.org/en/master/api/printer.html#send-an-arbitrary-command-t
 Sends any command to the printer via the serial interface. Should be used with some care as some commands can interfere with or even stop a running print job.
 If successful returns a 204 No Content and an empty body.
 */
-bool OctoprintClient::octoPrintPrinterCommand(char *gcodeCommand) {
+bool OctoprintClient::printerCommand(char *gcodeCommand) {
     const String command = "/api/printer/command";
     char postData[50];
 
@@ -571,7 +572,7 @@ bool OctoprintClient::octoPrintPrinterCommand(char *gcodeCommand) {
 
     String response = sendPostToOctoPrint(command, postData);
 
-    if (httpStatusCode == 204) return true;
+    if (state.httpStatusCode == 204) return true;
     return false;
 }
 
@@ -581,7 +582,7 @@ bool OctoprintClient::octoPrintPrinterCommand(char *gcodeCommand) {
 /**
  * Close the client
  * */
-void OctoprintClient::closeClient() {
+void OctoprintClient::closeClient() const {
     // if(client.connected()){    //1.1.4 - Seems to crash/halt ESP32 if 502 Bad Gateway server error
     client.stop();
     // }
@@ -591,7 +592,7 @@ void OctoprintClient::closeClient() {
  * Extract the HTTP header response code. Used for error reporting - will print in serial monitor any non 200 response codes (i.e. if something has gone wrong!).
  * Thanks Brian for the start of this function, and the chuckle of watching you realise on a live stream that I didn't use the response code at that time! :)
  * */
-int OctoprintClient::extractHttpCode(String statusCode, String body) {
+int OctoprintClient::extractHttpCode(String statusCode, String body) const {
     if (isDebugEnabled) {
         Serial.print("\nStatus code to extract: ");
         Serial.println(statusCode);
@@ -618,39 +619,39 @@ int OctoprintClient::extractHttpCode(String statusCode, String body) {
 }
 
 void OctoprintClient::fetchPrinterStateFromJson(const JsonVariant root) {
-    printerStatus.printerStateText = root["state"]["text"].as<String>();
+    state.printerState.printerStateText = root["state"]["text"].as<String>();
 
     if (root["state"]["flags"]["closedOrError"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::ClosedOrError);
+        state.printerState.setState(PrinterState::OperationalStateFlags::ClosedOrError);
 
     else if (root["state"]["flags"]["error"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::Error);
+        state.printerState.setState(PrinterState::OperationalStateFlags::Error);
 
     else if (root["state"]["flags"]["operational"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::Operational);
+        state.printerState.setState(PrinterState::OperationalStateFlags::Operational);
 
     else if (root["state"]["flags"]["paused"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::Paused);
+        state.printerState.setState(PrinterState::OperationalStateFlags::Paused);
 
     else if (root["state"]["flags"]["printing"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::Printing);
+        state.printerState.setState(PrinterState::OperationalStateFlags::Printing);
 
     else if (root["state"]["flags"]["ready"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::Ready);
+        state.printerState.setState(PrinterState::OperationalStateFlags::Ready);
 
     else if (root["state"]["flags"]["sdReady"].as<bool>())
-        printerStatus.setState(PrinterState::OperationalStateFlags::SdReady);
+        state.printerState.setState(PrinterState::OperationalStateFlags::SdReady);
 }
 
 void OctoprintClient::fetchPrinterThermalDataFromJson(const JsonVariant &root) {
-    printerStatus.temperature.bedCurrentCelsius = root["temperature"]["bed"]["actual"].as<float>();
-    printerStatus.temperature.bedCurrentCelsius = root["temperature"]["bed"]["target"].as<float>();
+    state.printerState.temperature.bedCurrentCelsius = root["temperature"]["bed"]["actual"].as<float>();
+    state.printerState.temperature.bedCurrentCelsius = root["temperature"]["bed"]["target"].as<float>();
 
-    printerStatus.temperature.tool0TargetCelsius = root["temperature"]["tool0"]["target"].as<float>();
-    printerStatus.temperature.tool0CurrentCelsius = root["temperature"]["tool0"]["actual"].as<float>();
+    state.printerState.temperature.tool0TargetCelsius = root["temperature"]["tool0"]["target"].as<float>();
+    state.printerState.temperature.tool0CurrentCelsius = root["temperature"]["tool0"]["actual"].as<float>();
 
-    printerStatus.temperature.tool1TargetCelsius = root["temperature"]["tool1"]["target"].as<float>();
-    printerStatus.temperature.tool1CurrentCelsius = root["temperature"]["tool1"]["actual"].as<float>();
+    state.printerState.temperature.tool1TargetCelsius = root["temperature"]["tool1"]["target"].as<float>();
+    state.printerState.temperature.tool1CurrentCelsius = root["temperature"]["tool1"]["actual"].as<float>();
 }
 
 } // namespace octoprint

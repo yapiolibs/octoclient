@@ -99,98 +99,108 @@ struct BedCallRequest {
     float tempActualCelsius;
     float tempOffsetCelsius;
     float tempTargetCelsius;
-    long  tempHistoryTimestamp;
+    long tempHistoryTimestamp;
     float tempHistoryActual;
 };
 } // namespace internal
 
-struct OctoprintClient {
-
-    PrinterState printerStatus;
+struct OverallState {
+    PrinterState printerState;
     OctoprintVersion octoprintVersion;
     octoprint::internal::BedCallRequest bedRequest;
     octoprint::internal::JobRequest printJob;
-    int httpStatusCode = 0;
-    String httpErrorBody = "";
+    mutable int httpStatusCode{0};
+    String httpErrorBody{""};
+};
+
+struct OctoprintClient {
 
     OctoprintClient(const String &apiKey, Client &connection, const IPAddress &hostIp, uint16_t hostPort = 5000);
 
     OctoprintClient(const String &apiKey, Client &connecion, const String &hostUrl, uint16_t hostPort = 5000);
 
-    // xxx
-    String sendGetToOctoprint(String command);
+    OverallState getCachedState() const;
 
-    String getOctoprintEndpointResults(String command);
+    /**
+     * Send custom command to OctoPrint.
+     * Sends a custom command via GET to the endpoint's API.
+     * @param command custom api command
+     * @return the Json response body
+     */
+    String sendCustomCommand(String command) const;
 
-    bool getPrinterStatistics();
+    bool fetchOctoprintVersion();
 
-    bool getOctoprintVersion();
+    bool fetchPrinterStatistics();
 
+    bool fetchPrintJob();
 
-    bool getPrintJob();
+    bool sendDisconnect();
 
-    String sendPostToOctoPrint(const String &command, const String &postData);
+    bool sendAutoConnect();
 
-    bool octoPrintConnectionDisconnect();
+    bool sendFakeAck();
 
-    bool octoPrintConnectionAutoConnect();
+    bool printHeadHome();
 
-    bool octoPrintConnectionFakeAck();
+    bool printHeadRelativeJog(double x, double y, double z, double f);
 
-    bool octoPrintPrintHeadHome();
+    bool printExtrude(double amount);
 
-    bool octoPrintPrintHeadRelativeJog(double x, double y, double z, double f);
+    bool setTargetBedTemperature(uint16_t celsius);
 
-    bool octoPrintExtrude(double amount);
+    bool setTargetTool0Temperature(uint16_t celsius);
 
-    bool octoPrintSetBedTemperature(uint16_t t);
+    bool setTargetTool1Temperature(uint16_t celsius);
 
-    bool octoPrintSetTool0Temperature(uint16_t t);
+    bool fetchPrinterSdStatus();
 
-    bool octoPrintSetTool1Temperature(uint16_t t);
+    bool printerSdInit();
 
-    bool octoPrintGetPrinterSD();
+    bool printerSdRefresh();
 
-    bool octoPrintPrinterSDInit();
+    bool printerSdRelease();
 
-    bool octoPrintPrinterSDRefresh();
+    bool fetchPrinterBed();
 
-    bool octoPrintPrinterSDRelease();
+    bool jobStart();
 
-    bool octoPrintGetPrinterBed();
+    bool jobCancel();
 
-    bool octoPrintJobStart();
+    bool jobRestart();
 
-    bool octoPrintJobCancel();
+    bool jobPauseResume();
 
-    bool octoPrintJobRestart();
+    bool jobPause();
 
-    bool octoPrintJobPauseResume();
+    bool jobResume();
 
-    bool octoPrintJobPause();
+    bool fileSelect(String &path);
 
-    bool octoPrintJobResume();
-
-    bool octoPrintFileSelect(String &path);
-
-    bool octoPrintPrinterCommand(char *gcodeCommand);
+    bool printerCommand(char *gcodeCommand);
 
 private:
+    OverallState state;
+
     Client &client;
     const String &apiKey;
     const IPAddress &hostIp{};
-    const String &hostUrl {};
+    const String &hostUrl{};
     const uint16_t hostPort;
 
     const uint16_t maxMessageLengthBytes = 1000;
     bool isDebugEnabled{false};
     DynamicJsonDocument requestBuffer{1024};
 
-    void closeClient();
+    void closeClient() const;
 
-    int extractHttpCode(String statusCode, String body);
+    String sendGetToOctoprint(String command) const;
 
-    String sendRequestToOctoprint(const String &type, const String &command, const String &data);
+    String sendPostToOctoPrint(const String &command, const String &postData) const;
+
+    String sendRequestToOctoprint(const String &type, const String &command, const String &data) const;
+
+    int extractHttpCode(String statusCode, String body) const;
 
     void fetchPrinterStateFromJson(const JsonVariant root);
 
