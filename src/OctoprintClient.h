@@ -1,12 +1,7 @@
-/* ___       _        ____       _       _      _    ____ ___
-  / _ \  ___| |_ ___ |  _ \ _ __(_)_ __ | |_   / \  |  _ \_ _|
- | | | |/ __| __/ _ \| |_) | '__| | '_ \| __| / _ \ | |_) | |
- | |_| | (__| || (_) |  __/| |  | | | | | |_ / ___ \|  __/| |
-  \___/ \___|\__\___/|_|   |_|  |_|_| |_|\__/_/   \_\_|  |___|
-
- Author: https://github.com/rubienr
- based on Stephen Ludgate https://www.chunkymedia.co.uk
-*/
+/**
+ * Author: https://github.com/rubienr
+ * based on OcttoPrintAPI Stephen Ludgate https://www.chunkymedia.co.uk
+ */
 
 #pragma once
 

@@ -2,26 +2,23 @@
   "name": "OctoPrintClient",
   "keywords": "OctoPrint, wifi",
   "description": "yet another OctoPrint client",
-  "homepage": "https://github.com/yapiolibs/octoclient",
+  "homepage": "https://github.com/yapiolibs/octoprintclient",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yapiolibs/octoclient.git"
+    "url": "https://github.com/yapiolibs/octoprintclient.git"
   },
   "authors": [
     {
-        "name": "Raoul Rubien",
-        "url": "https://github.com/rubienr",
-        "maintainer" : "true"
+      "name": "Raoul Rubien",
+      "url": "https://github.com/rubienr",
+      "maintainer": "true"
     }
   ],
-  
-    "dependencies":
-  {
+  "dependencies": {
     "name": " ArduinoJson@6.14.0",
     "authors": "Benoit Blanchon",
     "frameworks": "arduino"
   },
-  
   "version": "0.1",
   "frameworks": "arduino",
   "platforms": "*"

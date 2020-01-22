@@ -1,15 +1,10 @@
-/* ___       _        ____       _       _      _    ____ ___
-  / _ \  ___| |_ ___ |  _ \ _ __(_)_ __ | |_   / \  |  _ \_ _|
- | | | |/ __| __/ _ \| |_) | '__| | '_ \| __| / _ \ | |_) | |
- | |_| | (__| || (_) |  __/| |  | | | | | |_ / ___ \|  __/| |
-  \___/ \___|\__\___/|_|   |_|  |_|_| |_|\__/_/   \_\_|  |___|
-
- Author: https://github.com/rubienr
- based on Stephen Ludgate https://www.chunkymedia.co.uk
-*/
+/**
+ * Author: https://github.com/rubienr
+ * based on OcttoPrintAPI Stephen Ludgate https://www.chunkymedia.co.uk
+ */
 
 #include "Arduino.h"
-#include "OctoPrintAPI.h"
+#include "OctoprintClient.h"
 
 namespace octoprint {
 
@@ -17,14 +12,12 @@ OctoprintClient::OctoprintClient(const String &apiKey, Client &client, const IPA
         client{client},
         apiKey{apiKey},
         hostIp{hostIp},
-
         hostPort{hostPort} {}
 
 
 OctoprintClient::OctoprintClient(const String &apiKey, Client &client, const String &hostUrl, uint16_t hostPort) :
         client{client},
         apiKey{apiKey},
-
         hostUrl{hostUrl},
         hostPort{hostPort} {}
 
