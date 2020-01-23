@@ -15,7 +15,7 @@
     }
   ],
   "dependencies": {
-    "name": " ArduinoJson",
+    "name": "ArduinoJson",
     "authors": "Benoit Blanchon",
     "frameworks": "arduino"
   },
